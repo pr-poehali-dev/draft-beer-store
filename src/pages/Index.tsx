@@ -5,18 +5,31 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { Separator } from '@/components/ui/separator';
 import Icon from '@/components/ui/icon';
 
 const Index = () => {
   const [user, setUser] = useState({
-    name: 'Алексей',
-    bonusPoints: 340,
-    level: 'Пивной мастер',
+    name: '',
+    email: '',
+    phone: '',
+    bonusPoints: 0,
+    level: 'Новичок',
     nextLevelPoints: 500,
-    isLoggedIn: false
+    isLoggedIn: false,
+    orders: []
   });
 
   const [cart, setCart] = useState([]);
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
+  const [registerForm, setRegisterForm] = useState({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
 
   const beerCatalog = [
     {
@@ -55,11 +68,118 @@ const Index = () => {
   ];
 
   const addToCart = (beer) => {
-    setCart([...cart, beer]);
+    const existingItem = cart.find(item => item.id === beer.id);
+    if (existingItem) {
+      setCart(cart.map(item => 
+        item.id === beer.id 
+          ? { ...item, quantity: item.quantity + 1 }
+          : item
+      ));
+    } else {
+      setCart([...cart, { ...beer, quantity: 1 }]);
+    }
   };
 
-  const toggleLogin = () => {
-    setUser(prev => ({ ...prev, isLoggedIn: !prev.isLoggedIn }));
+  const removeFromCart = (beerId) => {
+    setCart(cart.filter(item => item.id !== beerId));
+  };
+
+  const updateQuantity = (beerId, newQuantity) => {
+    if (newQuantity === 0) {
+      removeFromCart(beerId);
+    } else {
+      setCart(cart.map(item => 
+        item.id === beerId 
+          ? { ...item, quantity: newQuantity }
+          : item
+      ));
+    }
+  };
+
+  const getCartTotal = () => {
+    return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
+  };
+
+  const getCartItemsCount = () => {
+    return cart.reduce((total, item) => total + item.quantity, 0);
+  };
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    // Простая проверка для демо
+    if (loginForm.email && loginForm.password) {
+      setUser({
+        name: 'Алексей',
+        email: loginForm.email,
+        phone: '+7 (999) 123-45-67',
+        bonusPoints: 340,
+        level: 'Пивной мастер',
+        nextLevelPoints: 500,
+        isLoggedIn: true,
+        orders: [
+          { id: 1, date: '2024-01-15', items: ['Warm Amber', 'Craft Lager'], total: 230 },
+          { id: 2, date: '2024-01-10', items: ['Dark Stout'], total: 140 }
+        ]
+      });
+      setIsLoginOpen(false);
+      setLoginForm({ email: '', password: '' });
+    }
+  };
+
+  const handleRegister = (e) => {
+    e.preventDefault();
+    if (registerForm.name && registerForm.email && registerForm.password === registerForm.confirmPassword) {
+      setUser({
+        name: registerForm.name,
+        email: registerForm.email,
+        phone: registerForm.phone,
+        bonusPoints: 50, // Бонус за регистрацию
+        level: 'Новичок',
+        nextLevelPoints: 500,
+        isLoggedIn: true,
+        orders: []
+      });
+      setIsRegisterOpen(false);
+      setRegisterForm({ name: '', email: '', phone: '', password: '', confirmPassword: '' });
+    }
+  };
+
+  const handleLogout = () => {
+    setUser({
+      name: '',
+      email: '',
+      phone: '',
+      bonusPoints: 0,
+      level: 'Новичок',
+      nextLevelPoints: 500,
+      isLoggedIn: false,
+      orders: []
+    });
+  };
+
+  const handleCheckout = () => {
+    if (!user.isLoggedIn) {
+      setIsLoginOpen(true);
+      return;
+    }
+    
+    // Добавляем заказ в историю
+    const newOrder = {
+      id: Date.now(),
+      date: new Date().toLocaleDateString('ru-RU'),
+      items: cart.map(item => `${item.name} x${item.quantity}`),
+      total: getCartTotal()
+    };
+    
+    setUser(prev => ({
+      ...prev,
+      orders: [...prev.orders, newOrder],
+      bonusPoints: prev.bonusPoints + Math.floor(getCartTotal() / 10) // 1 балл за каждые 10 рублей
+    }));
+    
+    setCart([]);
+    setIsCartOpen(false);
+    alert('Заказ оформлен! Спасибо за покупку!');
   };
 
   return (
@@ -80,20 +200,236 @@ const Index = () => {
               <a href="#contacts" className="hover:text-amber-300 transition-colors">Контакты</a>
             </nav>
             <div className="flex items-center space-x-4">
-              <Button variant="outline" size="sm" className="text-amber-900 border-amber-300 hover:bg-amber-100">
-                <Icon name="ShoppingCart" size={16} className="mr-2" />
-                Корзина ({cart.length})
-              </Button>
+              <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="sm" className="text-amber-900 border-amber-300 hover:bg-amber-100 relative">
+                    <Icon name="ShoppingCart" size={16} className="mr-2" />
+                    Корзина
+                    {getCartItemsCount() > 0 && (
+                      <Badge className="absolute -top-2 -right-2 bg-amber-600 text-white text-xs w-6 h-6 rounded-full flex items-center justify-center">
+                        {getCartItemsCount()}
+                      </Badge>
+                    )}
+                  </Button>
+                </SheetTrigger>
+                <SheetContent className="w-[400px] sm:w-[540px]">
+                  <SheetHeader>
+                    <SheetTitle className="text-amber-900">Корзина</SheetTitle>
+                  </SheetHeader>
+                  <div className="mt-6 space-y-4">
+                    {cart.length === 0 ? (
+                      <div className="text-center py-8">
+                        <Icon name="ShoppingCart" size={48} className="mx-auto text-gray-400 mb-4" />
+                        <p className="text-gray-500">Корзина пуста</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="space-y-4 max-h-96 overflow-y-auto">
+                          {cart.map((item) => (
+                            <div key={item.id} className="flex items-center space-x-4 p-4 border border-amber-200 rounded-lg">
+                              <img src={item.image} alt={item.name} className="w-16 h-16 object-cover rounded" />
+                              <div className="flex-1">
+                                <h4 className="font-semibold text-amber-900">{item.name}</h4>
+                                <p className="text-sm text-amber-700">{item.type}</p>
+                                <p className="text-amber-900 font-bold">{item.price}₽</p>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                  className="h-8 w-8 p-0"
+                                >
+                                  <Icon name="Minus" size={14} />
+                                </Button>
+                                <span className="w-8 text-center">{item.quantity}</span>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                  className="h-8 w-8 p-0"
+                                >
+                                  <Icon name="Plus" size={14} />
+                                </Button>
+                                <Button 
+                                  size="sm" 
+                                  variant="destructive" 
+                                  onClick={() => removeFromCart(item.id)}
+                                  className="h-8 w-8 p-0 ml-2"
+                                >
+                                  <Icon name="X" size={14} />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <Separator />
+                        <div className="space-y-4">
+                          <div className="flex justify-between text-lg font-bold text-amber-900">
+                            <span>Итого:</span>
+                            <span>{getCartTotal()}₽</span>
+                          </div>
+                          <Button 
+                            onClick={handleCheckout} 
+                            className="w-full bg-amber-600 hover:bg-amber-700"
+                            size="lg"
+                          >
+                            {user.isLoggedIn ? 'Оформить заказ' : 'Войти и оформить'}
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </SheetContent>
+              </Sheet>
+              
               {!user.isLoggedIn ? (
-                <Button onClick={toggleLogin} size="sm" className="bg-amber-600 hover:bg-amber-700">
-                  Войти
-                </Button>
+                <div className="flex space-x-2">
+                  <Dialog open={isLoginOpen} onOpenChange={setIsLoginOpen}>
+                    <DialogTrigger asChild>
+                      <Button size="sm" variant="outline" className="border-amber-300 text-amber-900 hover:bg-amber-100">
+                        Войти
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle className="text-amber-900">Вход в личный кабинет</DialogTitle>
+                      </DialogHeader>
+                      <form onSubmit={handleLogin} className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="email">Email</Label>
+                          <Input 
+                            id="email" 
+                            type="email" 
+                            value={loginForm.email}
+                            onChange={(e) => setLoginForm({...loginForm, email: e.target.value})}
+                            required 
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="password">Пароль</Label>
+                          <Input 
+                            id="password" 
+                            type="password" 
+                            value={loginForm.password}
+                            onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
+                            required 
+                          />
+                        </div>
+                        <div className="flex space-x-2">
+                          <Button type="submit" className="flex-1 bg-amber-600 hover:bg-amber-700">
+                            Войти
+                          </Button>
+                          <Button 
+                            type="button" 
+                            variant="outline" 
+                            onClick={() => {
+                              setIsLoginOpen(false);
+                              setIsRegisterOpen(true);
+                            }}
+                            className="flex-1"
+                          >
+                            Регистрация
+                          </Button>
+                        </div>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
+                  
+                  <Dialog open={isRegisterOpen} onOpenChange={setIsRegisterOpen}>
+                    <DialogTrigger asChild>
+                      <Button size="sm" className="bg-amber-600 hover:bg-amber-700">
+                        Регистрация
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle className="text-amber-900">Регистрация</DialogTitle>
+                      </DialogHeader>
+                      <form onSubmit={handleRegister} className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="reg-name">Имя</Label>
+                          <Input 
+                            id="reg-name" 
+                            value={registerForm.name}
+                            onChange={(e) => setRegisterForm({...registerForm, name: e.target.value})}
+                            required 
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="reg-email">Email</Label>
+                          <Input 
+                            id="reg-email" 
+                            type="email" 
+                            value={registerForm.email}
+                            onChange={(e) => setRegisterForm({...registerForm, email: e.target.value})}
+                            required 
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="reg-phone">Телефон</Label>
+                          <Input 
+                            id="reg-phone" 
+                            type="tel" 
+                            value={registerForm.phone}
+                            onChange={(e) => setRegisterForm({...registerForm, phone: e.target.value})}
+                            placeholder="+7 (999) 123-45-67"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="reg-password">Пароль</Label>
+                          <Input 
+                            id="reg-password" 
+                            type="password" 
+                            value={registerForm.password}
+                            onChange={(e) => setRegisterForm({...registerForm, password: e.target.value})}
+                            required 
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="reg-confirm">Подтвердите пароль</Label>
+                          <Input 
+                            id="reg-confirm" 
+                            type="password" 
+                            value={registerForm.confirmPassword}
+                            onChange={(e) => setRegisterForm({...registerForm, confirmPassword: e.target.value})}
+                            required 
+                          />
+                        </div>
+                        <div className="flex space-x-2">
+                          <Button 
+                            type="button" 
+                            variant="outline" 
+                            onClick={() => {
+                              setIsRegisterOpen(false);
+                              setIsLoginOpen(true);
+                            }}
+                            className="flex-1"
+                          >
+                            Есть аккаунт?
+                          </Button>
+                          <Button type="submit" className="flex-1 bg-amber-600 hover:bg-amber-700">
+                            Зарегистрироваться
+                          </Button>
+                        </div>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
+                </div>
               ) : (
                 <div className="flex items-center space-x-2">
                   <Avatar className="w-8 h-8">
                     <AvatarFallback className="bg-amber-600 text-amber-50">{user.name[0]}</AvatarFallback>
                   </Avatar>
-                  <span className="text-sm">{user.name}</span>
+                  <span className="text-sm hidden md:inline">{user.name}</span>
+                  <Button 
+                    onClick={handleLogout} 
+                    size="sm" 
+                    variant="outline" 
+                    className="text-amber-900 border-amber-300 hover:bg-amber-100"
+                  >
+                    <Icon name="LogOut" size={14} />
+                  </Button>
                 </div>
               )}
             </div>
@@ -198,30 +534,71 @@ const Index = () => {
                       Профиль пользователя
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
+                  <CardContent className="space-y-6">
                     <div className="flex items-center space-x-4">
                       <Avatar className="w-16 h-16">
                         <AvatarFallback className="bg-amber-600 text-amber-50 text-2xl">
                           {user.name[0]}
                         </AvatarFallback>
                       </Avatar>
-                      <div>
+                      <div className="flex-1">
                         <h4 className="text-xl font-semibold text-amber-900">{user.name}</h4>
                         <p className="text-amber-700">{user.level}</p>
+                        <p className="text-sm text-amber-600">{user.email}</p>
+                        {user.phone && <p className="text-sm text-amber-600">{user.phone}</p>}
                       </div>
                     </div>
+                    
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="bg-amber-50 p-4 rounded-lg">
                         <h5 className="font-semibold text-amber-900 mb-2">Статистика покупок</h5>
-                        <p className="text-sm text-amber-700">Всего заказов: 23</p>
-                        <p className="text-sm text-amber-700">Литров выпито: 47.5л</p>
+                        <p className="text-sm text-amber-700">Всего заказов: {user.orders.length}</p>
+                        <p className="text-sm text-amber-700">Потрачено: {user.orders.reduce((sum, order) => sum + order.total, 0)}₽</p>
                       </div>
                       <div className="bg-amber-50 p-4 rounded-lg">
-                        <h5 className="font-semibold text-amber-900 mb-2">Любимые сорта</h5>
-                        <p className="text-sm text-amber-700">1. Warm Amber</p>
-                        <p className="text-sm text-amber-700">2. Dark Stout</p>
+                        <h5 className="font-semibold text-amber-900 mb-2">Бонусы</h5>
+                        <p className="text-sm text-amber-700">Текущие баллы: {user.bonusPoints}</p>
+                        <p className="text-sm text-amber-700">Уровень: {user.level}</p>
                       </div>
                     </div>
+                  </CardContent>
+                </Card>
+
+                {/* История заказов */}
+                <Card className="border-amber-200">
+                  <CardHeader>
+                    <CardTitle className="flex items-center text-amber-900">
+                      <Icon name="Clock" size={24} className="mr-2" />
+                      История заказов
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {user.orders.length === 0 ? (
+                      <div className="text-center py-8">
+                        <Icon name="ShoppingBag" size={48} className="mx-auto text-gray-400 mb-4" />
+                        <p className="text-gray-500">У вас пока нет заказов</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {user.orders.slice().reverse().map((order) => (
+                          <div key={order.id} className="border border-amber-200 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-semibold text-amber-900">Заказ #{order.id}</span>
+                              <span className="text-sm text-amber-700">{order.date}</span>
+                            </div>
+                            <div className="text-sm text-amber-700 mb-2">
+                              {order.items.join(', ')}
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <Badge className="bg-green-100 text-green-800 border-green-300">
+                                Выполнен
+                              </Badge>
+                              <span className="font-bold text-amber-900">{order.total}₽</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -231,7 +608,7 @@ const Index = () => {
                   <Icon name="LogIn" size={48} className="mx-auto mb-4 text-amber-600" />
                   <h4 className="text-xl font-semibold text-amber-900 mb-2">Войдите в личный кабинет</h4>
                   <p className="text-amber-700 mb-6">Получите доступ к бонусам и истории заказов</p>
-                  <Button onClick={toggleLogin} className="bg-amber-600 hover:bg-amber-700">
+                  <Button onClick={() => setIsLoginOpen(true)} className="bg-amber-600 hover:bg-amber-700">
                     Войти
                   </Button>
                 </CardContent>
